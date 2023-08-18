@@ -5,6 +5,9 @@ import org.springframework.stereotype.Component;
 
 import java.lang.annotation.*;
 
+/**
+ * 订阅主题
+ */
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
@@ -22,7 +25,7 @@ public @interface MqttSubscriber {
      *
      * @return
      */
-    QosEnum qos();
+    QosEnum qos() default QosEnum.Q_2_EXACTLY_ONCE;
 
     /**
      * 消费者缓存队列大小

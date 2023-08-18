@@ -8,7 +8,7 @@ import javax.annotation.PostConstruct;
 import java.util.UUID;
 
 /**
- * 签名配置
+ * 发布者配置
  *
  * @author houp
  * @since 1.0.0
@@ -74,7 +74,7 @@ public class MqttPublisherProperties {
     private String clientId;
 
     /**
-     * 连接超时时间 秒
+     * 连接超时时间(秒)
      */
     private int connectionTimeout = 5;
 
@@ -89,7 +89,7 @@ public class MqttPublisherProperties {
     private int connectPoolSize = 10;
 
     /**
-     * 发布连接池获取链接超时时间 毫秒
+     * 发布消息从连接池获取链接超时时间(毫秒)
      */
     private long connectPoolPollTimeout = 3000L;
 

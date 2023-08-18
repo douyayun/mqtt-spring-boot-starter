@@ -12,6 +12,12 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConditionalOnProperty(prefix = "mqtt.subscriber", name = "enable", havingValue = "true")
 public class MqttSubscriberConfiguration {
+    @Autowired
+    ApplicationContext applicationContext;
+    @Autowired
+    MqttSubscriberProperties mqttSubscriberProperties;
+    @Autowired
+    MqttSubscriberRegister mqttSubscriberRegister;
 
     @Bean
     protected static MqttSubscriberRegister mqttSubscriberRegister() {
@@ -19,14 +25,7 @@ public class MqttSubscriberConfiguration {
     }
 
     @Bean
-    protected MqttSubscriberProperties mqttSubscriberProperties() {
-        return new MqttSubscriberProperties();
-    }
-
-    @Bean
-    protected MqttSubscribeClientService mqttSubscribeClientService(
-            @Autowired ApplicationContext applicationContext, MqttSubscriberProperties mqttSubscriberProperties,
-            MqttSubscriberRegister mqttSubscriberRegister) {
+    protected MqttSubscribeClientService mqttSubscribeClientService() {
         return new MqttSubscribeClientService(applicationContext, mqttSubscriberProperties, mqttSubscriberRegister);
     }
 }

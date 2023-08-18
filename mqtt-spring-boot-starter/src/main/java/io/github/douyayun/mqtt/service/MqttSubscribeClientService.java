@@ -6,7 +6,6 @@ import io.github.douyayun.mqtt.model.MqttProcessObject;
 import io.github.douyayun.mqtt.model.SubscriberInfo;
 import io.github.douyayun.mqtt.processor.MqttSubscribeProcessor;
 import io.github.douyayun.mqtt.properties.MqttSubscriberProperties;
-import io.github.douyayun.mqtt.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
@@ -17,17 +16,18 @@ import org.springframework.util.StringUtils;
 import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * @Date: 2021/5/20 15:52
+ * 消息订阅者服务
  */
 @Slf4j
 public class MqttSubscribeClientService {
 
-    private final MqttSubscriberProperties mqttSubscriberProperties;
-
     private MqttClient mqttClient;
+
+    private final MqttSubscriberProperties mqttSubscriberProperties;
 
     private final MqttConnectOptions options;
 
@@ -42,9 +42,7 @@ public class MqttSubscribeClientService {
     public MqttSubscribeClientService(ApplicationContext applicationContext, MqttSubscriberProperties mqttSubscriberProperties, MqttSubscriberRegister mqttSubscriberRegister) {
         this.mqttSubscriberProperties = mqttSubscriberProperties;
         this.applicationContext = applicationContext;
-
         serverUrl = "tcp://" + mqttSubscriberProperties.getIp() + ":" + mqttSubscriberProperties.getPort();
-
         subscriberInfoList = convert(mqttSubscriberRegister.getMqttSubscribeProcessorBeanNames());
 
         options = new MqttConnectOptions();
@@ -54,10 +52,14 @@ public class MqttSubscribeClientService {
             options.setPassword(mqttSubscriberProperties.getPassword().toCharArray());
         }
         options.setCleanSession(mqttSubscriberProperties.isEnableCleanSession());
-
         mqttCallback = getCallback(subscriberInfoList);
     }
 
+    /**
+     * 初始化
+     *
+     * @throws Exception
+     */
     @PostConstruct
     private void init() throws Exception {
         if (CollectionUtils.isEmpty(subscriberInfoList)) {
@@ -65,46 +67,46 @@ public class MqttSubscribeClientService {
             return;
         }
         try {
-            log.info("开始初始化mqtt subscribe客户端, config:{}", JsonUtils.toJson(mqttSubscriberProperties));
+            log.info("开始初始化mqtt subscribe客户端, config:{}", mqttSubscriberProperties.toString());
             mqttClient = new MqttClient(serverUrl, mqttSubscriberProperties.getClientId(), new MemoryPersistence());
-
             // 设定分发器
             mqttClient.setCallback(mqttCallback);
-
             // 连接
             mqttClient.connect(options);
             log.info("mqtt subscribe客户端连接成功, ip:{}, 端口:{}, clientId:{}", mqttSubscriberProperties.getIp(), mqttSubscriberProperties.getPort(), mqttSubscriberProperties.getClientId());
-
             // 注册subscribers
             for (SubscriberInfo subscriberInfo : subscriberInfoList) {
                 String topic = subscriberInfo.getTopic();
                 int qos = subscriberInfo.getQos().getQos();
                 mqttClient.subscribe(topic, qos);
-                // 新建消费者 无需线程池，每个消费者用一个线程
-                // noinspection AlibabaAvoidManuallyCreateThread
+
                 Thread thread = new Thread(new ConsumeRunnable(subscriberInfo));
                 thread.setName("mqtt-subscriber-" + subscriberInfo.getTopic());
                 thread.start();
+
                 log.info("mqtt subscribe客户端注册Subscriber topic:{},qos:{}", topic, qos);
             }
 
-            log.info("mqtt subscribe客户端 所有Subscriber注册成功, topics:{}",
-                    subscriberInfoList.stream().map(SubscriberInfo::getTopic).collect(Collectors.toList()));
+            log.info("mqtt subscribe客户端 所有Subscriber注册成功, topics:{}", subscriberInfoList.stream().map(SubscriberInfo::getTopic).collect(Collectors.toList()));
         } catch (Exception e) {
             log.error("初始化mqtt subscribe客户端失败, message:{}", e.getMessage(), e);
             throw e;
         }
     }
 
-    private void reInit(List<SubscriberInfo> subscriberInfoList) throws MqttException {
+    /**
+     * 断线重连
+     *
+     * @param subscriberInfoList
+     * @throws MqttException
+     */
+    private void reConnect(List<SubscriberInfo> subscriberInfoList) throws MqttException {
         mqttClient.close(true);
-
         mqttClient = new MqttClient(serverUrl, mqttSubscriberProperties.getClientId(), new MemoryPersistence());
         // 设定分发器
         mqttClient.setCallback(mqttCallback);
         // 连接
         mqttClient.connect(options);
-
         // 注册subscribers
         for (SubscriberInfo subscriberInfo : subscriberInfoList) {
             String topic = subscriberInfo.getTopic();
@@ -112,7 +114,6 @@ public class MqttSubscribeClientService {
             mqttClient.subscribe(topic, qos);
         }
     }
-
 
     /**
      * 回调函数
@@ -123,33 +124,39 @@ public class MqttSubscribeClientService {
     private MqttCallback getCallback(List<SubscriberInfo> orgSubscriberInfoList) {
         return new MqttCallback() {
             private final String ip = mqttSubscriberProperties.getIp();
-
             private final String port = mqttSubscriberProperties.getPort();
-
-            private final int maxReconnectCount = mqttSubscriberProperties.getSubscriberClientReconnectCount();
-
+            private final int maxReconnectCount = mqttSubscriberProperties.getClientReconnectCount();
+            private final long reconnectIntervalTime = mqttSubscriberProperties.getClientReconnectIntervalTime();
             private final List<SubscriberInfo> subscriberInfoList = orgSubscriberInfoList;
 
+            /**
+             * 丢失链接
+             *
+             * @param throwable the reason behind the loss of connection.
+             */
             @Override
             public void connectionLost(Throwable throwable) {
                 log.error("mqtt 失去连接 message:{}", throwable.getMessage(), throwable);
-                if (throwable instanceof MqttException) {
-                    MqttException mqttException = (MqttException) throwable;
-                    if (mqttException.getReasonCode() == MqttException.REASON_CODE_CONNECTION_LOST) {
-                        // 断开连接 重连
-                        for (int i = 1; i <= maxReconnectCount; i++) {
-                            try {
-                                log.info("mqtt subscribe客户端第{}/{}次尝试重连, 连接信息 ip:{}, 端口:{}", i, maxReconnectCount, ip, port);
-                                reInit(subscriberInfoList);
-                                log.info("mqtt subscribe客户端第{}次重连成功, 连接信息 ip:{}, 端口:{}", i, ip, port);
-                                return;
-                            } catch (Exception e) {
-                                log.error("mqtt subscribe客户端第{}/{}次尝试重连失败, 连接信息 ip:{}, 端口:{}, message:{}", i, maxReconnectCount, ip, port, e.getMessage(), e);
-                            }
-                        }
-                        log.error("mqtt subscribe客户端重连失败, 重连次数达到{}次, 连接信息 ip:{}, 端口:{}", maxReconnectCount, ip, port);
+                if (!(throwable instanceof MqttException)) {
+                    return;
+                }
+                MqttException mqttException = (MqttException) throwable;
+                if (mqttException.getReasonCode() != MqttException.REASON_CODE_CONNECTION_LOST) {
+                    return;
+                }
+                // 断开连接 重连
+                for (int i = 1; i <= maxReconnectCount; i++) {
+                    try {
+                        log.info("mqtt subscribe客户端第{}/{}次尝试重连, 连接信息 ip:{}, 端口:{}", i, maxReconnectCount, ip, port);
+                        reConnect(subscriberInfoList);
+                        log.info("mqtt subscribe客户端第{}次重连成功, 连接信息 ip:{}, 端口:{}", i, ip, port);
+                        TimeUnit.MILLISECONDS.sleep(reconnectIntervalTime);
+                        return;
+                    } catch (Exception e) {
+                        log.error("mqtt subscribe客户端第{}/{}次尝试重连失败, 连接信息 ip:{}, 端口:{}, message:{}", i, maxReconnectCount, ip, port, e.getMessage(), e);
                     }
                 }
+                log.error("mqtt subscribe客户端重连失败, 重连次数达到{}次, 连接信息 ip:{}, 端口:{}", maxReconnectCount, ip, port);
             }
 
             @Override
@@ -160,13 +167,11 @@ public class MqttSubscribeClientService {
                     String matchStr = subscriberInfo.getTopic();
                     if (matchStr.equals(topic) || (matchStr.endsWith("#") && topic.startsWith(matchStr.substring(0, matchStr.length() - 1)))) {
                         // 分发到该队列
-                        log.info("mqtt dispatch message, topic:{}, qos:{}, aimTopic:{}", topic, message.getQos(), matchStr);
+                        log.info("mqtt 消息, topic:{}, qos:{}, aimTopic:{}", topic, message.getQos(), matchStr);
                         try {
-                            subscriberInfo.getMessageQueue().add(MqttProcessObject.builder()
-                                    .topic(topic)
-                                    .message(message)
-                                    .build());
-                        } catch (IllegalStateException e) {
+                            subscriberInfo.getMessageQueue().add(MqttProcessObject.builder().topic(topic).message(message).build());
+                            // TimeUnit.MILLISECONDS.sleep(1);
+                        } catch (Exception e) {
                             log.error("提交消息到队列失败, topic:{}, subscriber:{}, message:{}",
                                     topic,
                                     subscriberInfo.getMqttSubscribeProcessor().getClass().getName(),
@@ -181,7 +186,7 @@ public class MqttSubscribeClientService {
                         return;
                     }
                 }
-                log.warn("The message has no corresponding subscription processor, which is caused by some unknown issues. topic:{}", topic);
+                log.warn("主题消息没有相应的订阅处理器 topic:{}", topic);
             }
 
 
@@ -206,11 +211,8 @@ public class MqttSubscribeClientService {
                     QosEnum qos = mqttSubscriber.qos();
                     int cacheCapacity = mqttSubscriber.cacheCapacity();
                     if (cacheCapacity <= 0) {
-                        log.warn("{} 中 @MqttSubscriber(cacheCapacity={}), 该参数必须大于0, 已更改为配置文件默认值:{}",
-                                i.getClass().getName(),
-                                cacheCapacity,
-                                mqttSubscriberProperties.getSubscriberQueueCapacity());
-                        cacheCapacity = mqttSubscriberProperties.getSubscriberQueueCapacity();
+                        log.warn("{} 中 @MqttSubscriber(cacheCapacity={}), 该参数必须大于0, 已更改为配置文件默认值:{}", i.getClass().getName(), cacheCapacity, mqttSubscriberProperties.getQueueCapacity());
+                        cacheCapacity = mqttSubscriberProperties.getQueueCapacity();
                     }
                     return SubscriberInfo.builder()
                             .topic(topic)

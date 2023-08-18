@@ -8,7 +8,7 @@ import javax.annotation.PostConstruct;
 import java.util.UUID;
 
 /**
- * 签名配置
+ * 订阅者配置
  *
  * @author houp
  * @since 1.0.0
@@ -32,7 +32,7 @@ public class MqttSubscriberProperties {
             } else if (!StringUtils.hasText(clientId)) {
                 throw new RuntimeException("subscriber mqtt客户端id是否随机生成配置为false时, 未配置mqtt 客户端id: {" + prefix + ".port}");
             }
-            if (subscriberQueueCapacity <= 0) {
+            if (queueCapacity <= 0) {
                 throw new RuntimeException("subscriber mqtt消费队列大小必须大于0: {" + prefix + ".port}");
             }
         }
@@ -74,23 +74,28 @@ public class MqttSubscriberProperties {
     private String clientId;
 
     /**
-     * 连接超时时间 秒
+     * 连接超时时间(秒)
      */
     private int connectionTimeout = 5;
 
     /**
-     * 是否为 临时会话, 客户端断开broker不再推送
+     * 是否是临时会话, 客户端断开broker不再推送
      */
     private boolean enableCleanSession = true;
 
     /**
      * 每个消费者缓存队列大小
      */
-    private int subscriberQueueCapacity = 100;
+    private int queueCapacity = 100;
 
     /**
      * 消费客户端重连最大次数
      */
-    private int subscriberClientReconnectCount = 5;
+    private int clientReconnectCount = 5;
+
+    /**
+     * 消费客户端重连间每次隔时间(毫秒)
+     */
+    private int clientReconnectIntervalTime = 100;
 
 }

@@ -1,4 +1,4 @@
-package io.github.douyayun.mqtt.service;
+package io.github.douyayun.mqtt.processor.impl;
 
 import io.github.douyayun.mqtt.processor.MqttPublishProcessor;
 import io.github.douyayun.mqtt.properties.MqttPublisherProperties;
@@ -9,7 +9,7 @@ import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 
 /**
- * @Date: 2021/5/20 14:51
+ * 消息发布处理器实现类
  */
 public class MqttPublishProcessorImpl implements MqttPublishProcessor {
 
@@ -17,9 +17,9 @@ public class MqttPublishProcessorImpl implements MqttPublishProcessor {
 
     private final MqttPublishClientPool mqttPublishClientPool;
 
-    public MqttPublishProcessorImpl(MqttPublisherProperties mqttPublisherProperties) {
+    public MqttPublishProcessorImpl(MqttPublisherProperties mqttPublisherProperties, MqttPublishClientPool mqttPublishClientPool) {
         this.mqttPublisherProperties = mqttPublisherProperties;
-        mqttPublishClientPool = new MqttPublishClientPool(mqttPublisherProperties);
+        this.mqttPublishClientPool = mqttPublishClientPool;
     }
 
     @PostConstruct

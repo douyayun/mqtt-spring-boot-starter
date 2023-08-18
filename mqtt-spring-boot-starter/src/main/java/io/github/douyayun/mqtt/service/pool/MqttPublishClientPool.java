@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * @Date: 2021/5/21 9:48
+ * 发布客户端连接池
  */
 @Slf4j
 public class MqttPublishClientPool {
@@ -24,8 +24,13 @@ public class MqttPublishClientPool {
 
     private ArrayBlockingQueue<MqttPublishClient> mqttPublishClientQueue;
 
+    /**
+     * 初始化连接池
+     */
     public void init() {
-        log.info("mqtt publisher连接池 开始初始化, 连接池大小:{}", mqttPublisherProperties.getConnectPoolSize());
+        log.info("mqtt publisher连接池, 开始初始化, 连接池大小:{}",
+                mqttPublisherProperties.getConnectPoolSize());
+
         mqttPublishClientQueue = new ArrayBlockingQueue<>(
                 mqttPublisherProperties.getConnectPoolSize(),
                 false,
@@ -42,11 +47,22 @@ public class MqttPublishClientPool {
                         })
                         .collect(Collectors.toList())
         );
-        log.info("mqtt publisher连接池初始化完成, ip:{}, 端口:{}, clientId前缀:{}-, 连接池大小:{}", mqttPublisherProperties.getIp(), mqttPublisherProperties.getPort(), mqttPublisherProperties.getClientId(), mqttPublishClientQueue.size());
+
+        log.info("mqtt publisher连接池初始化完成, ip:{}, 端口:{}, clientId前缀:{}-, 连接池大小:{}",
+                mqttPublisherProperties.getIp(),
+                mqttPublisherProperties.getPort(),
+                mqttPublisherProperties.getClientId(),
+                mqttPublishClientQueue.size());
     }
 
+    /**
+     * 发布消息
+     *
+     * @param topic
+     * @param message
+     * @throws Exception
+     */
     public void publish(String topic, MqttMessage message) throws Exception {
-//        System.out.println(mqttPublishClientQueue.size()+ "/"+mqttPublisherProperties.getConnectPoolSize());
         MqttPublishClient client = mqttPublishClientQueue.poll(mqttPublisherProperties.getConnectPoolPollTimeout(), TimeUnit.MILLISECONDS);
         if (client == null) {
             log.error("mqtt publisher连接池暂无就绪客户端, 当前连接池大小:{}", mqttPublisherProperties.getConnectPoolSize());
@@ -54,11 +70,9 @@ public class MqttPublishClientPool {
         }
         try {
             client.publish(topic, message);
-            mqttPublishClientQueue.put(client);
         } catch (MqttException e) {
-            mqttPublishClientQueue.put(client);
             throw e;
-        } catch (Exception e) {
+        } finally {
             mqttPublishClientQueue.put(client);
         }
     }

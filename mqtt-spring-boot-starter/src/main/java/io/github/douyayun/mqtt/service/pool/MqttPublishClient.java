@@ -15,7 +15,10 @@ import org.springframework.util.StringUtils;
 @Slf4j
 public class MqttPublishClient {
 
+    private MqttClient mqttClient;
+
     private final MqttPublisherProperties mqttPublisherProperties;
+
     private final String clientId;
 
     private final String serverUrl;
@@ -36,9 +39,11 @@ public class MqttPublishClient {
         }
     }
 
-    private MqttClient mqttClient;
-
-
+    /**
+     * 链接
+     *
+     * @throws MqttException
+     */
     public void connect() throws MqttException {
         mqttClient = new MqttClient(serverUrl, clientId, new MemoryPersistence());
         // 连接
@@ -46,6 +51,13 @@ public class MqttPublishClient {
         log.info("mqtt publish客户端连接成功, ip:{}, 端口:{}, clientId:{}", mqttPublisherProperties.getIp(), mqttPublisherProperties.getPort(), clientId);
     }
 
+    /**
+     * 发布消息
+     *
+     * @param topic
+     * @param message
+     * @throws MqttException
+     */
     public void publish(String topic, MqttMessage message) throws MqttException {
         mqttClient.publish(topic, message);
     }

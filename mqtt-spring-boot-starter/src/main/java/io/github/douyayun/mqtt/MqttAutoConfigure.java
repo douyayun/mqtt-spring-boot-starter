@@ -3,6 +3,7 @@ package io.github.douyayun.mqtt;
 import io.github.douyayun.mqtt.config.MqttPublisherConfiguration;
 import io.github.douyayun.mqtt.config.MqttSubscriberConfiguration;
 import io.github.douyayun.mqtt.properties.MqttPublisherProperties;
+import io.github.douyayun.mqtt.properties.MqttSubscriberProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @ConditionalOnWebApplication
 // @ConditionalOnClass(SignatureInterceptor.class)
-@EnableConfigurationProperties(MqttPublisherProperties.class)
+@EnableConfigurationProperties({MqttPublisherProperties.class, MqttSubscriberProperties.class})
 @Import({MqttPublisherConfiguration.class, MqttSubscriberConfiguration.class})
 public class MqttAutoConfigure {
     private static final Logger log = LoggerFactory.getLogger(MqttAutoConfigure.class);
