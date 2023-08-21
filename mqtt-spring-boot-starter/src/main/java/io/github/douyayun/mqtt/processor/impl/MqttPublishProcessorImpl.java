@@ -36,6 +36,7 @@ public class MqttPublishProcessorImpl implements MqttPublishProcessor {
     public void publish(String topic, String message) throws Exception {
         MqttMessage mqttMessage = new MqttMessage();
         mqttMessage.setPayload(message.getBytes(StandardCharsets.UTF_8));
+        mqttMessage.setRetained(true);
         mqttMessage.setQos(mqttPublisherProperties.getQos());
         mqttPublishClientPool.publish(topic, mqttMessage);
     }
@@ -44,6 +45,7 @@ public class MqttPublishProcessorImpl implements MqttPublishProcessor {
     public void publish(String topic, byte[] message) throws Exception {
         MqttMessage mqttMessage = new MqttMessage();
         mqttMessage.setPayload(message);
+        mqttMessage.setRetained(true);
         mqttMessage.setQos(mqttPublisherProperties.getQos());
         mqttPublishClientPool.publish(topic, mqttMessage);
     }

@@ -15,12 +15,14 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
  * 消息订阅者服务
+ * @author Administrator
  */
 @Slf4j
 public class MqttSubscribeClientService {
@@ -51,6 +53,9 @@ public class MqttSubscribeClientService {
             options.setUserName(mqttSubscriberProperties.getUserName());
             options.setPassword(mqttSubscriberProperties.getPassword().toCharArray());
         }
+        options.setKeepAliveInterval(20);
+        // 支持同时发送的消息数为1000. （默认值为10）
+        options.setMaxInflight(1000);
         options.setCleanSession(mqttSubscriberProperties.isEnableCleanSession());
         mqttCallback = getCallback(subscriberInfoList);
     }
@@ -102,6 +107,7 @@ public class MqttSubscribeClientService {
      */
     private void reConnect(List<SubscriberInfo> subscriberInfoList) throws MqttException {
         mqttClient.close(true);
+        mqttSubscriberProperties.setClientId(UUID.randomUUID().toString().replace("-",""));
         mqttClient = new MqttClient(serverUrl, mqttSubscriberProperties.getClientId(), new MemoryPersistence());
         // 设定分发器
         mqttClient.setCallback(mqttCallback);
@@ -160,33 +166,33 @@ public class MqttSubscribeClientService {
             }
 
             @Override
-            public synchronized void messageArrived(String topic, MqttMessage message) {
+            public void messageArrived(String topic, MqttMessage message) {
                 // 分发逻辑
-                for (int i = 0; i < subscriberInfoList.size(); i++) {
-                    SubscriberInfo subscriberInfo = subscriberInfoList.get(i);
-                    String matchStr = subscriberInfo.getTopic();
-                    if (matchStr.equals(topic) || (matchStr.endsWith("#") && topic.startsWith(matchStr.substring(0, matchStr.length() - 1)))) {
-                        // 分发到该队列
-                        log.info("mqtt 消息, topic:{}, qos:{}, aimTopic:{}", topic, message.getQos(), matchStr);
-                        try {
-                            subscriberInfo.getMessageQueue().add(MqttProcessObject.builder().topic(topic).message(message).build());
-                            // TimeUnit.MILLISECONDS.sleep(1);
-                        } catch (Exception e) {
-                            log.error("提交消息到队列失败, topic:{}, subscriber:{}, message:{}",
-                                    topic,
-                                    subscriberInfo.getMqttSubscribeProcessor().getClass().getName(),
-                                    e.getMessage(), e);
-                        }
-                        // 前移一位
-                        if (i != 0) {
-                            SubscriberInfo previous = subscriberInfoList.get(i - 1);
-                            subscriberInfoList.set(i - 1, subscriberInfo);
-                            subscriberInfoList.set(i, previous);
-                        }
-                        return;
-                    }
-                }
-                log.warn("主题消息没有相应的订阅处理器 topic:{}", topic);
+                // for (int i = 0; i < subscriberInfoList.size(); i++) {
+                //     SubscriberInfo subscriberInfo = subscriberInfoList.get(i);
+                //     String matchStr = subscriberInfo.getTopic();
+                //     if (matchStr.equals(topic) || (matchStr.endsWith("#") && topic.startsWith(matchStr.substring(0, matchStr.length() - 1)))) {
+                //         // 分发到该队列
+                //         log.info("mqtt 消息, topic:{}, qos:{}, aimTopic:{}", topic, message.getQos(), matchStr);
+                //         try {
+                //             subscriberInfo.getMessageQueue().add(MqttProcessObject.builder().topic(topic).message(message).build());
+                //             // TimeUnit.MILLISECONDS.sleep(1);
+                //         } catch (Exception e) {
+                //             log.error("提交消息到队列失败, topic:{}, subscriber:{}, message:{}",
+                //                     topic,
+                //                     subscriberInfo.getMqttSubscribeProcessor().getClass().getName(),
+                //                     e.getMessage(), e);
+                //         }
+                //         // 前移一位
+                //         if (i != 0) {
+                //             SubscriberInfo previous = subscriberInfoList.get(i - 1);
+                //             subscriberInfoList.set(i - 1, subscriberInfo);
+                //             subscriberInfoList.set(i, previous);
+                //         }
+                //         return;
+                //     }
+                // }
+                // log.warn("主题消息没有相应的订阅处理器 topic:{}", topic);
             }
 
 

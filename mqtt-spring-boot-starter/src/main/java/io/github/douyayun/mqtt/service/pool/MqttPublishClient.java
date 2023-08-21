@@ -32,6 +32,9 @@ public class MqttPublishClient {
 
         options = new MqttConnectOptions();
         options.setAutomaticReconnect(true);
+        options.setKeepAliveInterval(20);
+        // 支持同时发送的消息数为1000. （默认值为10）
+        options.setMaxInflight(1000);
         options.setConnectionTimeout(mqttPublisherProperties.getConnectionTimeout());
         if (StringUtils.hasText(mqttPublisherProperties.getUserName()) && StringUtils.hasText(mqttPublisherProperties.getPassword())) {
             options.setUserName(mqttPublisherProperties.getUserName());
